@@ -135,7 +135,7 @@ describe('PlatformFitScorer', () => {
 describe('HookScorer', () => {
   const scorer = new HookScorer();
   it('returns zeros and one tip for empty or whitespace text', () => {
-    for (const text of ['', '   \n\t ', '‮​']) {
+    for (const text of ['', '   \n\t ', '\u202E\u200B']) {
       const score = scorer.score(text, 'linkedin', 'en');
       expect(score.total).toBe(0);
       expect(Object.values(score.dimensions)).toEqual([0, 0, 0, 0, 0]);
@@ -151,7 +151,7 @@ describe('HookScorer', () => {
   });
   it('sanitises first: bidi and zero-width characters do not change the score', () => {
     const clean = 'I lost my first client because of one email I never sent.';
-    expect(scorer.score(`‮${clean.replace('client', 'cli​ent')}`, 'linkedin', 'en')).toEqual(
+    expect(scorer.score(`\u202E${clean.replace('client', 'cli\u200Bent')}`, 'linkedin', 'en')).toEqual(
       scorer.score(clean, 'linkedin', 'en'),
     );
   });

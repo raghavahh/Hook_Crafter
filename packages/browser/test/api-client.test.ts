@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient, ApiError, SwipeFileClient } from '../src';
 
 interface Call {
@@ -6,6 +6,8 @@ interface Call {
   readonly method: string;
   readonly headers: Headers;
   readonly body: unknown;
+  readonly cache: RequestCache | undefined;
+  readonly signal: AbortSignal | undefined;
 }
 
 const UUID = '3f2b8c1e-4d5a-4b6c-8d7e-9f0a1b2c3d4e';
@@ -14,7 +16,14 @@ function fakeFetch(respond: (call: Call) => Response | Promise<Response>): { fet
   const calls: Call[] = [];
   const fetchImpl: typeof fetch = async (input, init) => {
     const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as unknown) : undefined;
-    const call: Call = { url: String(input), method: init?.method ?? 'GET', headers: new Headers(init?.headers), body };
+    const call: Call = {
+      url: String(input),
+      method: init?.method ?? 'GET',
+      headers: new Headers(init?.headers),
+      body,
+      cache: init?.cache,
+      signal: init?.signal ?? undefined,
+    };
     calls.push(call);
     return respond(call);
   };
@@ -110,7 +119,7 @@ describe('ApiClient', () => {
   it('sanitises and validates generate requests before sending JSON', async () => {
     const hooks = Array.from({ length: 10 }, () => ({ text: 'A hook', frameworkId: 'contrarian', platform: 'linkedin' }));
     const { api, calls } = client(() => json({ hooks }));
-    const req = { topic: '  ‮hiring mistakes ', platform: 'linkedin', language: 'en', tone: 'bold' } as const;
+    const req = { topic: '  \u202Ehiring mistakes ', platform: 'linkedin', language: 'en', tone: 'bold' } as const;
     await expect(api.generate(req)).resolves.toEqual({ hooks });
     expect(calls[0]).toMatchObject({ method: 'POST', url: 'https://api.example.test/v1/hooks/generate' });
     expect(calls[0]?.headers.get('content-type')).toBe('application/json');
@@ -183,6 +192,68 @@ describe('ApiClient', () => {
     ]);
     expect(await caught(api.adminMetrics(0))).toMatchObject({ code: 'VALIDATION', status: 0 });
     expect(calls).toHaveLength(2);
+  });
+});
+
+/** A fetch that never answers until its signal aborts. */
+function hangingFetch(call: Call): Promise<Response> {
+  return new Promise((_, reject) => {
+    call.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+  });
+}
+
+describe('ApiClient deadlines and caching', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('sets cache: no-store and a signal on every request', async () => {
+    const { api, calls } = client(() => json({ ok: true }));
+    await api.health();
+    expect(calls[0]?.cache).toBe('no-store');
+    expect(calls[0]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('times out standard routes after 15 s as UNAVAILABLE with status 0', async () => {
+    vi.useFakeTimers();
+    const { api } = client(hangingFetch);
+    const pending = caught(api.me());
+    await vi.advanceTimersByTimeAsync(14_999);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await pending).toMatchObject({ code: 'UNAVAILABLE', status: 0, message: expect.stringContaining('too long') });
+  });
+
+  it('gives AI routes 30 s', async () => {
+    vi.useFakeTimers();
+    const { api } = client(hangingFetch);
+    let settled = false;
+    const pending = caught(api.generate({ topic: 'hiring', platform: 'x', language: 'en', tone: 'bold' })).finally(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await pending).toMatchObject({ code: 'UNAVAILABLE', status: 0 });
+  });
+
+  it('honours a caller signal, before and during the request', async () => {
+    const { api, calls } = client(hangingFetch);
+    const controller = new AbortController();
+    const pending = caught(api.history({ signal: controller.signal }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls).toHaveLength(1);
+    controller.abort();
+    expect(await pending).toMatchObject({ code: 'UNAVAILABLE', status: 0, message: 'The request was cancelled.' });
+    expect(await caught(api.me({ signal: controller.signal }))).toMatchObject({ message: 'The request was cancelled.' });
+    expect(calls).toHaveLength(1);
+  });
+
+  it('honours the body code over the status fallback (402 BILLING_PAST_DUE)', async () => {
+    const body = { error: { code: 'BILLING_PAST_DUE', message: 'Payment failed.', requestId: 'req-2' } };
+    const { api } = client(() => json(body, 402));
+    expect(await caught(api.createOrder('creator'))).toMatchObject({ code: 'BILLING_PAST_DUE', status: 402, requestId: 'req-2' });
+    const bare = client(() => new Response('', { status: 402 }));
+    expect(await caught(bare.api.me())).toMatchObject({ code: 'NO_CREDITS', status: 402 });
   });
 });
 

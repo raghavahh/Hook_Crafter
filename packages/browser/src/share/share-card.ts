@@ -1,5 +1,5 @@
 import { TextSanitizer } from '@hook/domain';
-import { wrapText } from './wrap-text';
+import { wrapMeasured } from './wrap-text';
 
 export type ShareCardSize = 'portrait' | 'landscape';
 
@@ -20,13 +20,12 @@ interface Layout {
   readonly pad: number;
   readonly scoreSize: number;
   readonly hookSize: number;
-  readonly charsPerLine: number;
   readonly maxLines: number;
 }
 
 const LAYOUTS: Readonly<Record<ShareCardSize, Layout>> = Object.freeze({
-  portrait: { width: 1080, height: 1350, pad: 96, scoreSize: 260, hookSize: 52, charsPerLine: 30, maxLines: 7 },
-  landscape: { width: 1200, height: 627, pad: 64, scoreSize: 150, hookSize: 36, charsPerLine: 48, maxLines: 4 },
+  portrait: { width: 1080, height: 1350, pad: 96, scoreSize: 260, hookSize: 52, maxLines: 7 },
+  landscape: { width: 1200, height: 627, pad: 64, scoreSize: 150, hookSize: 36, maxLines: 4 },
 });
 
 const COLORS = { background: '#111318', accent: '#ff7a1a', text: '#f5f5f7', muted: '#a1a1aa' } as const;
@@ -102,10 +101,13 @@ export class ShareCardRenderer {
 
   #drawHook(ctx: Context2D, layout: Layout, hookText: string, top: number): void {
     const clean = TextSanitizer.clean(hookText).trim();
-    const lines = wrapText(`“${clean}”`, layout.charsPerLine, layout.maxLines);
+    const font = `500 ${String(layout.hookSize)}px ${this.#font}`;
+    ctx.font = font;
+    const measure = (s: string): number => ctx.measureText(s).width;
+    const lines = wrapMeasured(`“${clean}”`, measure, layout.width - 2 * layout.pad, layout.maxLines);
     const lineHeight = Math.round(layout.hookSize * 1.35);
     lines.forEach((line, index) => {
-      this.#text(ctx, line, layout.pad, top + index * lineHeight, `500 ${String(layout.hookSize)}px ${this.#font}`, COLORS.text);
+      this.#text(ctx, line, layout.pad, top + index * lineHeight, font, COLORS.text);
     });
   }
 

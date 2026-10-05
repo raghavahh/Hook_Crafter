@@ -26,6 +26,23 @@ const POLISH_TIPS: readonly string[] = [
 /** A third tip is shown only when that dimension is clearly weak. */
 const THIRD_TIP_BELOW = 12;
 
+/**
+ * Only the first 5,000 code points are scored (the longest input any route accepts), so a
+ * pasted novel cannot freeze the page. Raw input is pre-cut at 4x that before sanitising.
+ */
+export const MAX_SCORED_CODE_POINTS = 5000;
+
+function limitCodePoints(text: string, max: number): string {
+  let count = 0;
+  let end = 0;
+  for (const ch of text) {
+    if (count === max) break;
+    count += 1;
+    end += ch.length;
+  }
+  return text.slice(0, end);
+}
+
 function defaultScorers(): readonly DimensionScorer[] {
   return [new CuriosityScorer(), new SpecificityScorer(), new EmotionScorer(), new ClarityScorer(), new PlatformFitScorer()];
 }
@@ -46,7 +63,7 @@ export class HookScorer {
   }
 
   public score(text: string, platform: Platform, language: Language): HookScore {
-    const clean = TextSanitizer.clean(text);
+    const clean = limitCodePoints(TextSanitizer.clean(text.slice(0, MAX_SCORED_CODE_POINTS * 4)), MAX_SCORED_CODE_POINTS);
     if (clean.trim() === '') {
       return Object.freeze({ total: 0, dimensions: Object.freeze(zeroDimensions()), tips: Object.freeze([EMPTY_TEXT_TIP]) });
     }

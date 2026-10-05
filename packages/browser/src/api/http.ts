@@ -4,13 +4,27 @@ import { ApiError } from './api-error';
 
 export type HttpMethod = 'GET' | 'POST' | 'DELETE';
 
+/** Per-call options the UI may pass (e.g. to cancel when a component unmounts). */
+export interface RequestOptions {
+  readonly signal?: AbortSignal | undefined;
+}
+
+export interface CallOptions extends RequestOptions {
+  readonly body?: unknown;
+  readonly timeoutMs?: number;
+}
+
+/** AI routes wait on a model; everything else should answer fast. */
+export const STANDARD_TIMEOUT_MS = 15_000;
+export const AI_TIMEOUT_MS = 30_000;
+
 export interface HttpTransportOptions {
   readonly baseUrl: string;
   readonly getAccessToken: () => Promise<string | null>;
   readonly fetchImpl?: typeof fetch;
 }
 
-/** Status -> code when the server's error body is missing or malformed. */
+/** Status -> code, used only when the server's error body is missing or malformed. */
 function codeForStatus(status: number): ErrorCode {
   const known: Readonly<Record<number, ErrorCode>> = {
     400: 'VALIDATION',
@@ -39,9 +53,15 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
+function abortError(caller: AbortSignal | undefined): ApiError {
+  return caller?.aborted === true
+    ? new ApiError('UNAVAILABLE', 0, 'The request was cancelled.')
+    : new ApiError('UNAVAILABLE', 0, 'The server took too long to respond. Please try again.');
+}
+
 /**
  * Low-level JSON-over-fetch. Never logs request or response bodies (they hold user text).
- * Every failure becomes an ApiError.
+ * Every request has a deadline and `cache: 'no-store'`; every failure becomes an ApiError.
  */
 export class HttpTransport {
   readonly #baseUrl: string;
@@ -55,18 +75,43 @@ export class HttpTransport {
   }
 
   /** Sends a request and validates the 2xx JSON body with `schema`. */
-  public async json<S extends z.ZodType>(method: HttpMethod, path: string, schema: S, body?: unknown): Promise<z.output<S>> {
-    const response = await this.send(method, path, body);
-    const parsed = schema.safeParse(await readJson(response));
-    if (!parsed.success) {
-      throw new ApiError('INTERNAL', response.status, 'Unexpected response from the server.', this.#requestId(response));
-    }
-    return parsed.data;
+  public async json<S extends z.ZodType>(method: HttpMethod, path: string, schema: S, call: CallOptions = {}): Promise<z.output<S>> {
+    const init = await this.#init(method, call.body);
+    return this.#withDeadline(call, async (signal) => {
+      const response = await this.#exchange(path, { ...init, signal });
+      const parsed = schema.safeParse(await readJson(response));
+      if (!parsed.success) {
+        throw new ApiError('INTERNAL', response.status, 'Unexpected response from the server.', this.#requestId(response));
+      }
+      return parsed.data;
+    });
   }
 
-  /** Sends a request; resolves with the 2xx response, throws ApiError otherwise. */
-  public async send(method: HttpMethod, path: string, body?: unknown): Promise<Response> {
-    const init = await this.#init(method, body);
+  /** Sends a request whose 2xx body is ignored (e.g. 204 No Content). */
+  public async send(method: HttpMethod, path: string, call: CallOptions = {}): Promise<void> {
+    const init = await this.#init(method, call.body);
+    await this.#withDeadline(call, (signal) => this.#exchange(path, { ...init, signal }));
+  }
+
+  /** Runs `run` with a signal that aborts on timeout or when the caller's signal aborts. */
+  async #withDeadline<T>(call: CallOptions, run: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const caller = call.signal;
+    if (caller?.aborted === true) throw abortError(caller);
+    const controller = new AbortController();
+    const onAbort = (): void => controller.abort();
+    caller?.addEventListener('abort', onAbort, { once: true });
+    const timer = setTimeout(onAbort, call.timeoutMs ?? STANDARD_TIMEOUT_MS);
+    try {
+      return await run(controller.signal);
+    } catch (error) {
+      throw controller.signal.aborted ? abortError(caller) : error;
+    } finally {
+      clearTimeout(timer);
+      caller?.removeEventListener('abort', onAbort);
+    }
+  }
+
+  async #exchange(path: string, init: RequestInit): Promise<Response> {
     let response: Response;
     try {
       response = await this.#fetch(`${this.#baseUrl}${path}`, init);
@@ -81,9 +126,9 @@ export class HttpTransport {
     const headers = new Headers({ accept: 'application/json' });
     const token = await this.#token();
     if (token !== null && token !== '') headers.set('authorization', `Bearer ${token}`);
-    if (body === undefined) return { method, headers };
+    if (body === undefined) return { method, headers, cache: 'no-store' };
     headers.set('content-type', 'application/json');
-    return { method, headers, body: JSON.stringify(body) };
+    return { method, headers, cache: 'no-store', body: JSON.stringify(body) };
   }
 
   async #token(): Promise<string | null> {
@@ -94,6 +139,7 @@ export class HttpTransport {
     }
   }
 
+  /** The server's error body wins (e.g. 402 BILLING_PAST_DUE vs NO_CREDITS); status is only a fallback. */
   async #toError(response: Response): Promise<ApiError> {
     const parsed = ApiErrorSchema.safeParse(await readJson(response));
     if (parsed.success) {

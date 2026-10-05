@@ -35,6 +35,23 @@ const StoredProfileSchema = z.strictObject({
 });
 
 /**
+ * A v4 UUID. crypto.randomUUID only exists in secure contexts (HTTPS, localhost), so fall
+ * back to one built from crypto.getRandomValues, which works everywhere.
+ */
+export function newProfileId(): string {
+  try {
+    if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  } catch {
+    // Fall through to getRandomValues.
+  }
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join('-');
+}
+
+/**
  * Voice Profiles live ONLY in this browser (PRD A6.4): no server storage.
  * Every storage access is guarded (private mode, quota, blocked storage); data read back is
  * Zod-validated and corrupt entries are dropped. Falls back to memory when storage is unusable.
@@ -55,7 +72,7 @@ export class VoiceProfileStore {
 
   /** Creates (no id) or replaces (existing id) a profile. Throws ValidationError / LimitReachedError. */
   public save(draft: VoiceProfileDraft): VoiceProfile {
-    const parsed = StoredProfileSchema.safeParse({ ...draft, id: draft.id ?? crypto.randomUUID() });
+    const parsed = StoredProfileSchema.safeParse({ ...draft, id: draft.id ?? newProfileId() });
     if (!parsed.success) throw new ValidationError('Please check the voice profile fields.');
     const profile: VoiceProfile = Object.freeze(parsed.data);
     const current = this.#read();

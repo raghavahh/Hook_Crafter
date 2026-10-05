@@ -1,6 +1,9 @@
 import { LimitReachedError, ValidationError } from '@hook/domain';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { VoiceProfileStore } from '../src';
+import { newProfileId } from '../src/voice/voice-profile-store';
+
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 
 const KEY = 'hook-crafter.voice-profiles.v1';
 
@@ -33,7 +36,7 @@ describe('VoiceProfileStore', () => {
 
   it('sanitises fields and enforces code-point limits', () => {
     const store = new VoiceProfileStore(new MemoryStorage());
-    expect(store.save({ ...draft, name: '  ‮Founder  ' }).name).toBe('Founder');
+    expect(store.save({ ...draft, name: '  \u202EFounder  ' }).name).toBe('Founder');
     expect(() => store.save({ ...draft, name: 'x'.repeat(41) })).toThrow(ValidationError);
     expect(() => store.save({ ...draft, niche: 'x'.repeat(61) })).toThrow(ValidationError);
     expect(() => store.save({ ...draft, avoid: 'x'.repeat(101) })).toThrow(ValidationError);
@@ -93,5 +96,26 @@ describe('VoiceProfileStore', () => {
     const store = new VoiceProfileStore(null);
     const saved = store.save(draft);
     expect(store.toRequestVoice(saved)).toEqual({ niche: 'B2B SaaS', audience: 'Indian founders', style: 'Short, blunt', avoid: 'hustle' });
+  });
+
+  describe('ids outside a secure context', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    });
+    it('falls back to getRandomValues when randomUUID is missing', () => {
+      const real = globalThis.crypto;
+      vi.stubGlobal('crypto', { getRandomValues: real.getRandomValues.bind(real) });
+      const ids = new Set(Array.from({ length: 50 }, () => newProfileId()));
+      expect(ids.size).toBe(50);
+      for (const id of ids) expect(id).toMatch(UUID_V4);
+      expect(new VoiceProfileStore(null).save(draft).id).toMatch(UUID_V4);
+    });
+    it('falls back when randomUUID throws', () => {
+      vi.spyOn(crypto, 'randomUUID').mockImplementation(() => {
+        throw new Error('SecurityError');
+      });
+      expect(newProfileId()).toMatch(UUID_V4);
+    });
   });
 });

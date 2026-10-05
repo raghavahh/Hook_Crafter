@@ -54,7 +54,7 @@ describe('FeedPreviewModel', () => {
     const preview = expectLossless('🔥'.repeat(200), 'instagram_caption');
     expect(graphemes(preview.visible)).toHaveLength(88);
     expect(preview.visible).toBe('🔥'.repeat(88));
-    const family = '👨‍👩‍👧';
+    const family = '👨\u200D👩\u200D👧';
     const zwj = expectLossless(family.repeat(100), 'shorts_title');
     expect(graphemes(zwj.visible)).toHaveLength(70);
   });
@@ -68,7 +68,7 @@ describe('FeedPreviewModel', () => {
   });
 
   it('works on the sanitised text', () => {
-    const preview = expectLossless('‮Hello​ world', 'linkedin');
+    const preview = expectLossless('\u202EHello\u200B world', 'linkedin');
     expect(preview.visible).toBe('Hello world');
   });
 
