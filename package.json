@@ -1,0 +1,40 @@
+{
+  "name": "hook-crafter",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "api",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "depcruise": "depcruise packages api/src apps/hooks/src --config .dependency-cruiser.cjs",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "check": "npm run typecheck && npm run lint && npm run depcruise && npm run test",
+    "secrets:scan": "node scripts/secret-scan.mjs",
+    "build": "npm run build --workspaces --if-present",
+    "prepare": "git config core.hooksPath .githooks || true"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@electric-sql/pglite": "0.5.8",
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
+    "@types/node": "26.6.4",
+    "@vitest/coverage-v8": "4.1.11",
+    "dependency-cruiser": "18.5.0",
+    "eslint": "10.12.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.13.0",
+    "prettier": "3.9.9",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.0",
+    "vitest": "4.1.11"
+  }
+}
