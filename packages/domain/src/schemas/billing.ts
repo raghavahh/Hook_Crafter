@@ -87,7 +87,6 @@ export type ChangePlanResponse = z.infer<typeof ChangePlanResponseSchema>;
 
 export const ProductOnlyRequestSchema = z.strictObject({ product: ProductIdSchema });
 export const CancelResponseSchema = z.strictObject({ accessUntil: IsoDateTimeSchema });
-export const ResumeResponseSchema = z.strictObject({ status: SubscriptionStatusSchema });
 
 export const SubscriptionViewSchema = z.strictObject({
   id: z.string(),

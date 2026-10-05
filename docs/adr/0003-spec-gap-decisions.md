@@ -15,6 +15,6 @@
 | D9 | `reels_script` platform | Not accepted by `/v1/hooks/generate`; Reels uses its own route |
 | D10 | Length unit | Code points everywhere (Zod, Postgres `char_length`, UI counters) |
 | D11 | Swipe limit for pack buyers | Any non-refunded pack purchase keeps the 500 limit permanently |
-| D12 | Plan changes | Any change clears `pending_plan_id`; upgrade difference from the current plan; upgrades blocked while `past_due`; cancel can be undone before period end (`/v1/billing/subscriptions/resume`) |
+| D12 | Plan changes | Any change clears `pending_plan_id`; upgrade difference from the current plan; upgrades blocked while `past_due`. Cancel cannot be undone (Razorpay has no API for it); the user can subscribe again after the period ends |
 | D13 | Rate limits | Per-user hourly counters in Postgres (`check_and_increment_quota`), limit from the user's plan |
 | D14 | Batch mode | UI convenience only (3 normal generates); not a security control |
