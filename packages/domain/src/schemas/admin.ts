@@ -28,7 +28,7 @@ export const AdminMetricsSchema = z.strictObject({
     byItem: z.array(z.strictObject({ purpose: z.string(), itemId: z.string(), count: Count, revenuePaise: Paise })),
   }),
   subscriptions: z.strictObject({
-    byStatus: z.record(z.enum(SUBSCRIPTION_STATUSES), Count),
+    byStatus: z.partialRecord(z.enum(SUBSCRIPTION_STATUSES), Count),
     activeByPlan: z.array(z.strictObject({ planId: z.string(), count: Count })),
     mrrPaise: Paise,
     newInRange: Count,

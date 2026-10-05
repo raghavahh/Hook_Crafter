@@ -1,11 +1,14 @@
 /**
  * Unicode safety (PRD B4 Flow 1, T11 / S-33).
- * - NFC normalisation
- * - strips bidi controls (U+202A to U+202E, U+2066 to U+2069, LRM/RLM/ALM), U+200B and U+FEFF
+ * - strips bidi controls (U+202A to U+202E, U+2066 to U+2069, LRM/RLM/ALM), U+200B, U+FEFF,
+ *   word joiners/invisible operators (U+2060 to U+2064), soft hyphen, U+180E, tag characters
+ *   and the variation selectors supplement (used to smuggle hidden text into prompts)
  * - strips C0/C1 control characters except newline and tab
  * - KEEPS U+200C/U+200D (ZWNJ/ZWJ), which Indic scripts need
+ * - NFC normalisation LAST, so clean(clean(x)) === clean(x)
  */
-const BIDI_AND_INVISIBLE = /[‪-‮⁦-⁩​‎‏؜﻿]/gu;
+const BIDI_AND_INVISIBLE =
+  /[‪-‮⁦-⁩​‎‏؜﻿⁠-⁤­᠎\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]/gu;
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/gu;
 
@@ -14,10 +17,10 @@ export class TextSanitizer {
 
   public static clean(input: string): string {
     return input
-      .normalize('NFC')
       .replace(/\r\n?/gu, '\n')
       .replace(BIDI_AND_INVISIBLE, '')
-      .replace(CONTROL, '');
+      .replace(CONTROL, '')
+      .normalize('NFC');
   }
 }
 
@@ -30,7 +33,11 @@ export function codePointLength(text: string): number {
 
 const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
-/** User-perceived characters (emoji and Devanagari conjuncts count as one). */
+/**
+ * User-perceived characters (emoji and Devanagari conjuncts count as one).
+ * Note: Indic conjunct clustering depends on the runtime's Unicode version (15.1+),
+ * so older browsers may count slightly more clusters for some Hindi words.
+ */
 export function graphemes(text: string): string[] {
   return Array.from(segmenter.segment(text), (s) => s.segment);
 }

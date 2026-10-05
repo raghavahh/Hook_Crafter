@@ -39,7 +39,8 @@ export const VerifyPaymentResponseSchema = z.strictObject({
 
 export const CatalogQuerySchema = z.strictObject({ product: ProductIdSchema });
 
-const AllowanceViewSchema = z.record(FeatureKeySchema, z.number().int().min(0));
+// partialRecord: a pack may grant only some features (z.record over an enum is exhaustive in Zod 4).
+const AllowanceViewSchema = z.partialRecord(FeatureKeySchema, z.number().int().min(0));
 export const CatalogResponseSchema = z.strictObject({
   packs: z.array(
     z.strictObject({ id: z.string(), name: z.string(), pricePaise: z.number().int(), credits: AllowanceViewSchema, unlocks: z.array(UnlockKeySchema) }),

@@ -23,7 +23,7 @@ interface AccessProfileProps {
 
 /** Limits from several sources: an unlock if ANY source has it, the highest limit wins (PRD A6.5). */
 export class AccessProfile {
-  public readonly unlocks: ReadonlySet<UnlockKey>;
+  readonly #unlocks: ReadonlySet<UnlockKey>;
   public readonly plan: Plan | null;
   public readonly swipeLimit: number;
   public readonly rateLimitPerHour: number;
@@ -31,7 +31,7 @@ export class AccessProfile {
   public readonly voiceProfileLimit: number;
 
   private constructor(props: AccessProfileProps) {
-    this.unlocks = new Set(props.unlocks);
+    this.#unlocks = new Set(props.unlocks);
     this.plan = props.plan;
     this.swipeLimit = props.swipeLimit;
     this.rateLimitPerHour = props.rateLimitPerHour;
@@ -42,7 +42,8 @@ export class AccessProfile {
 
   public static compute(catalog: Catalog, product: ProductId, sources: AccessSources): AccessProfile {
     const plan = sources.activePlanId === null ? null : (catalog.plan(product, sources.activePlanId) ?? null);
-    const paid = plan !== null || sources.hasPaidPack;
+    // A period for a plan id no longer in the Catalog still counts as paid (never drop a payer to free).
+    const paid = sources.activePlanId !== null || sources.hasPaidPack;
     return new AccessProfile({
       unlocks: sources.unlocks,
       plan,
@@ -53,11 +54,16 @@ export class AccessProfile {
     });
   }
 
+  /** A defensive copy: the profile itself can never be mutated. */
+  public get unlocks(): ReadonlySet<UnlockKey> {
+    return new Set(this.#unlocks);
+  }
+
   public has(unlock: UnlockKey): boolean {
-    return this.unlocks.has(unlock);
+    return this.#unlocks.has(unlock);
   }
 
   public unlockList(): UnlockKey[] {
-    return [...this.unlocks].sort();
+    return [...this.#unlocks].sort();
   }
 }

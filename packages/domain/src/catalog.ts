@@ -138,6 +138,13 @@ export class Catalog {
   public constructor(packs: readonly Pack[], plans: readonly Plan[], free: FreeTier, paid: PaidDefaults) {
     this.#packs = new Map(packs.map((p) => [p.id, p]));
     this.#plans = new Map(plans.map((p) => [p.id, p]));
+    if (this.#packs.size !== packs.length || this.#plans.size !== plans.length) {
+      throw new InvariantViolation('Duplicate pack or plan id in Catalog');
+    }
+    for (const env of ['test', 'live'] as const) {
+      const ids = plans.map((p) => p.providerPlanIds[env]).filter((id) => id !== null);
+      if (new Set(ids).size !== ids.length) throw new InvariantViolation(`Duplicate ${env} provider plan id`);
+    }
     this.free = Object.freeze({ ...free });
     this.paid = Object.freeze({ ...paid });
   }

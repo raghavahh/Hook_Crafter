@@ -8,6 +8,14 @@ export const TONES = ['bold', 'friendly', 'professional', 'witty', 'inspiring', 
 export const ToneSchema = z.enum(TONES);
 export type Tone = z.infer<typeof ToneSchema>;
 
+/** Optional text where a blank form field means "not provided". */
+function optionalText(max: number) {
+  return z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    boundedText(1, max).optional(),
+  );
+}
+
 export const FrameworkIdSchema = z.string().regex(/^[a-z][a-z0-9_]{1,39}$/u);
 const TurnstileTokenSchema = z.string().min(1).max(2048);
 
@@ -24,7 +32,7 @@ export const GenerateRequestSchema = z.strictObject({
   platform: GeneratePlatformSchema,
   language: LanguageSchema,
   tone: ToneSchema,
-  audience: boundedText(1, 100).optional(),
+  audience: optionalText(100),
   voice: VoiceProfileSchema.optional(),
   turnstileToken: TurnstileTokenSchema.optional(),
 });
@@ -89,7 +97,7 @@ export type SwipeHook = z.infer<typeof SwipeHookSchema>;
 export const SwipeListQuerySchema = z.strictObject({
   platform: PlatformSchema.optional(),
   frameworkId: FrameworkIdSchema.optional(),
-  collection: boundedText(1, 40).optional(),
+  collection: optionalText(40),
   cursor: z.string().max(200).optional(),
 });
 export type SwipeListQuery = z.output<typeof SwipeListQuerySchema>;
@@ -107,7 +115,7 @@ export const SwipeSaveRequestSchema = z.strictObject({
   frameworkId: FrameworkIdSchema,
   platform: PlatformSchema,
   language: LanguageSchema,
-  collection: boundedText(1, 40).optional(),
+  collection: optionalText(40),
 });
 export type SwipeSaveRequest = z.output<typeof SwipeSaveRequestSchema>;
 
