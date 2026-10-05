@@ -1,0 +1,37 @@
+name = "hook-crafter-api"
+main = "src/worker.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+# Daily billing reconciliation (Flow 5 step 6) at 03:30 UTC.
+[triggers]
+crons = ["30 3 * * *"]
+
+[ai]
+binding = "AI"
+
+[vars]
+ENVIRONMENT = "production"
+RAZORPAY_ENV = "live"
+ALLOWED_ORIGINS = "https://hooks.pages.dev"
+SUPABASE_URL = "https://YOUR-PROJECT.supabase.co"
+KILL_AI = "0"
+KILL_PAYMENTS = "0"
+READ_ONLY = "0"
+# Secrets (never here): wrangler secret put SUPABASE_SECRET_KEY / GROQ_API_KEY / GEMINI_API_KEY /
+# OPENROUTER_API_KEY / RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET / RAZORPAY_WEBHOOK_SECRET /
+# TURNSTILE_SECRET_KEY / ADMIN_USER_IDS / RAZORPAY_PLAN_IDS
+
+[env.staging]
+name = "hook-crafter-api-staging"
+[env.staging.vars]
+ENVIRONMENT = "staging"
+RAZORPAY_ENV = "test"
+ALLOWED_ORIGINS = "https://staging.hooks.pages.dev"
+SUPABASE_URL = "https://YOUR-DEV-PROJECT.supabase.co"
+KILL_AI = "0"
+KILL_PAYMENTS = "0"
+READ_ONLY = "0"
+[env.staging.ai]
+binding = "AI"

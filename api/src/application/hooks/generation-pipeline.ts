@@ -22,6 +22,8 @@ export interface PipelineRun<T> {
   readonly userId: string;
   readonly product: ProductId;
   readonly feature: FeatureKey;
+  /** Per-route hourly bucket (PRD B5: 30/hour/user each, 60 on Studio Monthly). */
+  readonly rateKey: string;
   readonly access: AccessState;
   /** All user-supplied text, checked by ContentPolicy BEFORE any credit is reserved. */
   readonly inputText: string;
@@ -58,7 +60,7 @@ export class GenerationPipeline {
   }
 
   public async run<T>(run: PipelineRun<T>): Promise<T> {
-    await this.#rateLimiter.hit(run.userId, run.product, 'ai', run.access.profile.rateLimitPerHour);
+    await this.#rateLimiter.hit(run.userId, run.product, run.rateKey, run.access.profile.rateLimitPerHour);
     const verdict = await this.#policy.checkInput(run.inputText);
     if (!verdict.allowed) {
       this.#logger.info('content_blocked', { feature: run.feature, category: verdict.category });

@@ -48,6 +48,7 @@ export class ReelsScriptService {
       userId,
       product: THIS_PRODUCT,
       feature: 'generate',
+      rateKey: 'reels',
       access,
       inputText: req.topic,
       botToken: null,

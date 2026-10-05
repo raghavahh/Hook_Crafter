@@ -29,6 +29,7 @@ export class PostRewriteService {
       userId,
       product: THIS_PRODUCT,
       feature: 'post_rewrite',
+      rateKey: 'rewrite_post',
       access,
       inputText: req.post,
       botToken: null,

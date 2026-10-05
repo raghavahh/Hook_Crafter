@@ -53,6 +53,7 @@ export class HookGenerationService {
       userId,
       product: THIS_PRODUCT,
       feature: 'generate',
+      rateKey: 'generate',
       access,
       inputText: userText,
       botToken: req.turnstileToken ?? null,

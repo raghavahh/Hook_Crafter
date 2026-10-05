@@ -1,8 +1,10 @@
 import { RateLimitError, type ProductId } from '@hook/domain';
 import type { Clock, QuotaRepository } from '../../ports';
-import { hourKey } from '../time';
+import { dayKey, hourKey } from '../time';
 
-/** Per-user hourly limits stored in Postgres (ADR-0003 D13). Limit comes from the user's plan. */
+export type RateWindow = 'hour' | 'day';
+
+/** Per-user limits stored in Postgres (ADR-0003 D13). Limits come from PRD B5 / the user's plan. */
 export class RateLimiter {
   readonly #quotas: QuotaRepository;
   readonly #clock: Clock;
@@ -12,14 +14,10 @@ export class RateLimiter {
     this.#clock = clock;
   }
 
-  public async hit(userId: string, product: ProductId, routeKey: string, limitPerHour: number): Promise<void> {
-    const allowed = await this.#quotas.increment(
-      `u:${userId}`,
-      product,
-      `rate:${routeKey}`,
-      hourKey(this.#clock.now()),
-      limitPerHour,
-    );
+  public async hit(userId: string, product: ProductId, routeKey: string, limit: number, window: RateWindow = 'hour'): Promise<void> {
+    const now = this.#clock.now();
+    const bucket = window === 'hour' ? hourKey(now) : dayKey(now);
+    const allowed = await this.#quotas.increment(`u:${userId}`, product, `rate:${routeKey}`, bucket, limit);
     if (!allowed) throw new RateLimitError();
   }
 }
