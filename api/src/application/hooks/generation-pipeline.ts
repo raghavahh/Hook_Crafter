@@ -6,6 +6,7 @@ import {
   SoldOutError,
   UpstreamError,
   ValidationError,
+  type AiTier,
   type AppError,
   type FeatureKey,
   type Language,
@@ -65,9 +66,11 @@ export class GenerationPipeline {
     }
     const allowFree = run.botToken !== null && (await this.#bot.verify(run.botToken, run.ip));
     const grant = await this.#resolver.reserve(run.userId, run.product, run.feature, allowFree);
-    const tier = grant.paid ? run.access.profile.aiTier : 'free';
+    // Paid credits always use the paid/priority tier; only free-quota requests use the free pool.
+    const planTier = run.access.profile.aiTier;
+    const tier: AiTier = grant.paid ? (planTier === 'free' ? 'paid' : planTier) : 'free';
     try {
-      const value = await this.#router.complete(run.request, tier === 'free' && grant.paid ? 'paid' : tier, run.validate);
+      const value = await this.#router.complete(run.request, tier, run.validate);
       await this.#resolver.commit(grant);
       return value;
     } catch (error: unknown) {

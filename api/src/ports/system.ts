@@ -49,3 +49,15 @@ export interface LlmProvider {
   readonly id: string;
   complete(request: LlmRequest, signal: AbortSignal): Promise<string>;
 }
+
+/** Supabase Auth admin API (service key): removes the auth user so a re-signup gets a new id. */
+export interface IdentityAdmin {
+  deleteUser(userId: string): Promise<void>;
+}
+
+/** Incident kill switches (SHARED-ENGINE section 10). */
+export interface Switches {
+  readonly killAi: boolean;
+  readonly killPayments: boolean;
+  readonly readOnly: boolean;
+}
